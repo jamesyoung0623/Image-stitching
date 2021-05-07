@@ -9,8 +9,9 @@ import numpy as np
 import scipy.spatial.distance as distance
 
 def readImages(image_folder):
-    image_names = sorted(glob.glob(os.path.join(image_folder, '*.jpg')))#[::-1]
-    #image_names = sorted(glob.glob(os.path.join(image_folder, '*.png')))[::-1]
+    #image_names = sorted(glob.glob(os.path.join(image_folder, '*.JPG')))#[::-1]
+    image_names = sorted(glob.glob(os.path.join(image_folder, '*.png')))[::-1]
+    #image_names = sorted(glob.glob(os.path.join(image_folder, '*.jpg')))#[::-1]
     images = []
 
     for image_name in image_names:
@@ -38,8 +39,7 @@ def matchFeatures(featuresA, featuresB):
     return good
 
 def cylindricalWarpImage(img):
-    f = 705
-    
+    f = 5500
     h, w, _ = img.shape
     K = np.array([[f, 0, w/2], [0, f, h/2], [0, 0, 1]])
 
@@ -66,20 +66,17 @@ def cylindricalWarpImage(img):
 if __name__ == '__main__':
     image_folder = sys.argv[1]
     images = readImages(image_folder)
+    images[-1] = cylindricalWarpImage(images[-1])
 
     while len(images)>1:
         imgL = images.pop()
         imgR = images.pop()
 
-        #sift = cv2.SIFT_create()
-
         imgR = cylindricalWarpImage(imgR)
         grayImage = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
-        #keypointsR, featuresR = sift.detectAndCompute(grayImage, None)
         keypointsR, featuresR = sift.computeKeypointsAndDescriptors(grayImage)
         
         grayImage = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
-        #keypointsL, featuresL = sift.detectAndCompute(grayImage, None)
         keypointsL, featuresL = sift.computeKeypointsAndDescriptors(grayImage)
         
         allMatches = matchFeatures(featuresR, featuresL)
@@ -89,30 +86,26 @@ if __name__ == '__main__':
 
         src_pts = np.float32(pointsR).reshape(-1, 1, 2)
         dst_pts = np.float32(pointsL).reshape(-1, 1, 2)
-        #H = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)[0]
         H = cv2.estimateAffine2D(src_pts, dst_pts, cv2.RANSAC, ransacReprojThreshold=5.0)[0]
 
-        #result = cv2.warpPerspective(imgR, H, (imgR.shape[1]+imgL.shape[1], imgR.shape[0]))
         result = cv2.warpAffine(imgR, H, (imgR.shape[1]+imgL.shape[1], imgL.shape[0]))
-        #cv2.imshow('f', result)
-        #cv2.waitKey(0)
-        
+
         for i in range(imgL.shape[0]):
             for j in range(imgL.shape[1]):
                 if not np.all(imgL[i][j] == 0):
                     result[i][j] = imgL[i][j]
 
+        prev = -1
         for i in range(result.shape[1]):
             column = np.array([result[idx][i] for idx in range(result.shape[0])])
             if np.all(column == 0):
-                result = result[:, :i-50]
-                break
+                if i != (prev+1):
+                    result = result[:, (prev+1):i-400]
+                    break
+                else:
+                    prev = i
         
         images.append(result)
-        #cv2.imshow('f', result)
-        #cv2.waitKey(0)
-        #exit()
 
-    #print(images[0].shape)
-    result = images[0][120:, :]
+    result = images[0][50:1400, :]
     cv2.imwrite("result.jpg", result)
